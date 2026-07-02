@@ -227,7 +227,7 @@ function drawBallChar(x,y,r,name,rot,dizzy){
 let state="title";
 let rally=0,best=+(localStorage.getItem("tamavolley_best")||0);
 let ball=null,charIdx=Math.floor(Math.random()*HATS.length);
-let oppX=0,swing=0,shake=0,serveAt=0,overAt=0,newBest=false;
+let oppX=0,swing=0,swingCd=0,shake=0,serveAt=0,overAt=0,newBest=false;
 let popups=[],bursts=[];
 let last=performance.now();
 function addBurst(x,y,r){bursts.push({x,y,r,age:0});}
@@ -265,6 +265,7 @@ function miss(){
 
 function update(dt){
   swing=Math.max(0,swing-dt);
+  swingCd=Math.max(0,swingCd-dt);
   oppHitT=Math.max(0,oppHitT-dt);
   shake=Math.max(0,shake-dt*30);
   popups.forEach(p=>p.age+=dt);
@@ -300,21 +301,30 @@ cv.addEventListener("pointerdown",e=>{
     if(performance.now()-overAt>600)startGame();
     return;
   }
-  if(!ball||ball.dir!==1)return;
-  const p=ballPos();
-  const ease=Math.min(1,rally/25); // 0=序盤ゆるゆる → 1=本気判定
-  if(p.z>0.5+0.18*(1-ease))return; // まだ遠い（序盤はネット手前でも打てる）
-  const dist=Math.hypot(px-p.bx,py-p.by);
-  const hitR=(Math.max(46,p.br*1.7)+20)*(2.0-1.0*ease);
-  if(dist<=hitR){
-    rally++;
-    if(rally>best){best=rally;newBest=true;localStorage.setItem("tamavolley_best",best);}
-    swing=0.25;
-    beep(880,0.10,"triangle",0.16);
-    addPopup(p.bx,p.by,"+1");
-    addBurst(p.bx,p.by,p.br);
-    if(rally%10===0){addPopup(W/2,H*0.42,rally+"回！すごい！","#ff9a2e");beep(1180,0.15,"sine",0.14);}
-    ball={dir:-1,t:0,T:0.62,fromX:p.x,toX:rand(-0.6,0.6),ch:ball.ch,rot:ball.rot};
+  if(swingCd>0)return; // スイング硬直中（連打防止）
+  swingCd=0.34;
+  swing=0.25;
+  let hitDone=false;
+  if(ball&&ball.dir===1){
+    const p=ballPos();
+    const ease=Math.min(1,rally/25); // 0=序盤ゆるゆる → 1=本気判定
+    const inRange=p.z<=0.5+0.18*(1-ease); // 序盤はネット手前でも打てる
+    const dist=Math.hypot(px-p.bx,py-p.by);
+    const hitR=(Math.max(46,p.br*1.7)+20)*(2.0-1.0*ease);
+    if(inRange&&dist<=hitR){
+      hitDone=true;
+      rally++;
+      if(rally>best){best=rally;newBest=true;localStorage.setItem("tamavolley_best",best);}
+      beep(880,0.10,"triangle",0.16);
+      addPopup(p.bx,p.by,"+1");
+      addBurst(p.bx,p.by,p.br);
+      if(rally%10===0){addPopup(W/2,H*0.42,rally+"回！すごい！","#ff9a2e");beep(1180,0.15,"sine",0.14);}
+      ball={dir:-1,t:0,T:0.62,fromX:p.x,toX:rand(-0.6,0.6),ch:ball.ch,rot:ball.rot};
+    }
+  }
+  if(!hitDone){ // 空振り
+    beep(250,0.09,"sine",0.07);
+    addPopup(px,py-30,"スカッ","#9aa7b5");
   }
 },{passive:false});
 
