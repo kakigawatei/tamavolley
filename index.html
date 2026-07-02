@@ -255,9 +255,9 @@ function drawBallChar(x,y,r,name,rot,dizzy){
 
 /* ---------- game state ---------- */
 let state="title";
-let rally=0,best=+(localStorage.getItem("tamavolley_best")||0);
+let rally=0,score=0,best=+(localStorage.getItem("tamavolley_best2")||0);
 let ball=null,charIdx=Math.floor(Math.random()*HATS.length);
-let oppX=0,swing=0,swingCd=0,shake=0,serveAt=0,overAt=0,newBest=false;
+let oppX=0,swing=0,swingCd=0,shake=0,serveAt=0,overAt=0,newBest=false,playStartAt=0;
 let popups=[],bursts=[];
 let last=performance.now();
 function addBurst(x,y,r){bursts.push({x,y,r,age:0});}
@@ -271,8 +271,9 @@ function serve(){
   ball={dir:1,t:0,T:Tin(),fromX:oppX,toX:rand(-0.55,0.55),ch:charIdx,rot:0};
 }
 function startGame(){
-  state="play";rally=0;newBest=false;ball=null;oppX=rand(-0.3,0.3);
+  state="play";rally=0;score=0;newBest=false;ball=null;oppX=rand(-0.3,0.3);
   serveAt=performance.now()+700;popups=[];
+  playStartAt=performance.now();
   beep(660,0.10,"sine",0.12);
 }
 function ballPos(){
@@ -345,12 +346,27 @@ cv.addEventListener("pointerdown",e=>{
     if(inRange&&dist<=hitR){
       hitDone=true;
       rally++;
-      if(rally>best){best=rally;newBest=true;localStorage.setItem("tamavolley_best",best);}
+      // タイミング×打点サイドで返球方向が決まる
+      // 早め（ネット越えてすぐ）＝逆サイドへ、遅め（引きつけ）＝同じサイドへ、ちょうど＝ど真ん中
+      const zMax=NETZ+0.16*(1-ease);
+      const tau=clamp(p.z/zMax,0,1); // 1=早い 0=遅い
+      const sideSign=p.x>=0?1:-1;
+      let toX=sideSign*(1-2*tau)*(0.65+Math.abs(p.x)*0.3)+rand(-0.05,0.05);
+      toX=clamp(toX,-0.9,0.9);
+      // センターに近いほど高得点
+      const ax=Math.abs(toX);
+      let pts,label,col;
+      if(ax<=0.15){pts=3;label="ど真ん中！+3";col="#ff9a2e";beep(1320,0.14,"sine",0.14);}
+      else if(ax<=0.35){pts=2;label="+2";col="#2b6bd9";}
+      else if(ax<=0.55){pts=1;label="+1";col="#ff5f7e";}
+      else{pts=-1;label="はじっこ… -1";col="#9aa7b5";beep(200,0.12,"sine",0.08);}
+      score+=pts;
+      if(score>best){best=score;newBest=true;localStorage.setItem("tamavolley_best2",best);}
       playHit(1);
-      addPopup(p.bx,p.by,"+1");
+      addPopup(p.bx,p.by,label,col);
       addBurst(p.bx,p.by,p.br);
-      if(rally%10===0){addPopup(W/2,H*0.42,rally+"回！すごい！","#ff9a2e");beep(1180,0.15,"sine",0.14);}
-      ball={dir:-1,t:0,T:0.62,fromX:p.x,toX:rand(-0.6,0.6),ch:ball.ch,rot:ball.rot};
+      if(rally%10===0){addPopup(W/2,H*0.42,rally+"回ラリー！","#ff9a2e");beep(1180,0.15,"sine",0.14);}
+      ball={dir:-1,t:0,T:0.62,fromX:p.x,toX,ch:ball.ch,rot:ball.rot};
     }
   }
   if(!hitDone){ // 空振り
@@ -507,9 +523,14 @@ function render(){
 
   // HUD
   if(state!=="title"){
-    outlineText(String(rally),W/2,H*0.09,W*0.14,"#2b6bd9","#fff",W*0.02);
-    outlineText("れんぞく",W/2,H*0.155,W*0.042,"#2b6bd9","#fff");
+    outlineText(String(score),W/2,H*0.09,W*0.14,"#2b6bd9","#fff",W*0.02);
+    outlineText("スコア",W/2,H*0.155,W*0.042,"#2b6bd9","#fff");
+    outlineText("れんぞく "+rally,W*0.16,H*0.05,W*0.04,"#2e7d46","#fff");
     outlineText("ベスト "+best,W*0.85,H*0.05,W*0.045,"#e0433f","#fff");
+    if(state==="play"&&performance.now()-playStartAt<4500){
+      outlineText("はやめ＝逆サイド／おそめ＝同じサイドへとぶ！",W/2,H*0.30,W*0.038,"#4a4a4a","#fff");
+      outlineText("まんなか狙いで高得点！",W/2,H*0.345,W*0.042,"#ff9a2e","#fff");
+    }
   }
 
   if(state==="title")renderTitle();
@@ -522,7 +543,7 @@ function renderTitle(){
     const iw=titleImg.naturalWidth,ih=titleImg.naturalHeight;
     const s=Math.max(W/iw,H/ih);
     ctx.drawImage(titleImg,(W-iw*s)/2,(H-ih*s)/2,iw*s,ih*s);
-    if(best>0)outlineText("ベスト "+best+" 回",W/2,H*0.955,W*0.045,"#e0433f","#fff");
+    if(best>0)outlineText("ベスト "+best+" 点",W/2,H*0.955,W*0.045,"#e0433f","#fff");
     return;
   }
   ctx.fillStyle="rgba(255,250,240,0.88)";
@@ -549,10 +570,11 @@ function renderOver(){
   ctx.fillStyle="rgba(255,250,240,0.9)";
   roundRect(W*0.08,H*0.22,W*0.84,H*0.40,24);ctx.fill();
   ctx.strokeStyle="#ffd76e";ctx.lineWidth=5;roundRect(W*0.08,H*0.22,W*0.84,H*0.40,24);ctx.stroke();
-  outlineText("ざんねん…！",W/2,H*0.29,W*0.07,"#4a4a4a","#fff");
-  outlineText(rally+" 回 つづいた！",W/2,H*0.38,W*0.09,"#ff5f7e","#fff",W*0.018);
-  if(newBest&&rally>0)outlineText("✨ しんきろく！ ✨",W/2,H*0.46,W*0.06,"#ff9a2e","#fff");
-  else outlineText("ベスト "+best+" 回",W/2,H*0.46,W*0.05,"#e0433f","#fff");
+  outlineText("ざんねん…！",W/2,H*0.28,W*0.07,"#4a4a4a","#fff");
+  outlineText("スコア "+score+" 点",W/2,H*0.37,W*0.09,"#ff5f7e","#fff",W*0.018);
+  outlineText("（"+rally+"回ラリー）",W/2,H*0.43,W*0.045,"#4a4a4a","#fff");
+  if(newBest&&score>0)outlineText("✨ しんきろく！ ✨",W/2,H*0.485,W*0.06,"#ff9a2e","#fff");
+  else outlineText("ベスト "+best+" 点",W/2,H*0.485,W*0.05,"#e0433f","#fff");
   drawBallChar(W*0.5,H*0.545,W*0.055,HATS[charIdx],Math.sin(performance.now()/180)*0.2,true);
   if(performance.now()-overAt>600&&Math.floor(performance.now()/600)%2===0)
     outlineText("タップで もういちど！",W/2,H*0.72,W*0.058,"#2b6bd9","#fff");
