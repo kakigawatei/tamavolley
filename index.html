@@ -226,6 +226,13 @@ oppImgs.swingL.src="opp_swing_left.png";
 oppImgs.swingR.src="opp_swing_right.png";
 let oppHitT=0,oppSide="R";
 
+/* ---------- player sprites (後ろ姿) ---------- */
+const playerImgs={idle:new Image(),swingL:new Image(),swingR:new Image()};
+playerImgs.idle.src="player_idle.png";
+playerImgs.swingL.src="player_swing_left.png";
+playerImgs.swingR.src="player_swing_right.png";
+let plSide="R";
+
 /* ---------- title art ---------- */
 const titleImg=new Image();titleImg.src="title.jpg";
 
@@ -327,6 +334,7 @@ cv.addEventListener("pointerdown",e=>{
   if(swingCd>0)return; // スイング硬直中（連打防止）
   swingCd=0.34;
   swing=0.25;
+  plSide=px<W/2?"L":"R";
   let hitDone=false;
   if(ball&&ball.dir===1){
     const p=ballPos();
@@ -457,11 +465,22 @@ function render(){
 
   if(p&&p.z<=NETZ)drawBall();
 
-  // player (back view) + racket
-  const pr=0.155*W,px=W/2,py=H*1.00;
-  const swAng=swing>0?lerp(-1.7,0.5,swing/0.25):0.5;
-  drawRacket(px+pr*0.95,py-pr*0.55,pr*0.75,swAng);
-  drawChar(px,py,pr,"cap",true);
+  // player (back view)
+  {
+    let img=swing>0?(plSide==="L"?playerImgs.swingL:playerImgs.swingR):playerImgs.idle;
+    if(!(img.complete&&img.naturalWidth))img=playerImgs.idle;
+    if(img.complete&&img.naturalWidth){
+      const ph=0.46*W*(swing>0?1.05:1);
+      const pw=ph*img.naturalWidth/img.naturalHeight;
+      const bob=swing>0?0:Math.sin(performance.now()/300)*H*0.004;
+      ctx.drawImage(img,W/2-pw/2,H*1.02-ph+bob,pw,ph);
+    }else{
+      const pr=0.155*W;
+      const swAng=swing>0?lerp(-1.7,0.5,swing/0.25):0.5;
+      drawRacket(W/2+pr*0.95,H*1.00-pr*0.55,pr*0.75,swAng);
+      drawChar(W/2,H*1.00,pr,"cap",true);
+    }
+  }
 
   // hit bursts
   bursts.forEach(b=>{
