@@ -256,6 +256,55 @@ function drawBallChar(x,y,r,name,rot,dizzy){
 /* ---------- game state ---------- */
 let state="title";
 let rally=0,score=0,best=+(localStorage.getItem("tamavolley_best2")||0);
+
+/* ---------- コンボ＆フィーバー ---------- */
+let combo=0,fever=0,gameEx=0,gameFevers=0;
+
+/* ---------- 実績・称号 ---------- */
+const ACH=[
+ {id:"first_ex",name:"ど真ん中デビュー",desc:"はじめてExcellentを出す"},
+ {id:"rally10",name:"はじめの一歩",desc:"1ゲームで10ラリー"},
+ {id:"combo5",name:"コンボマスター",desc:"フィーバーに突入する"},
+ {id:"ex10",name:"エクセレント職人",desc:"累計Excellent 10回"},
+ {id:"score100",name:"100点プレイヤー",desc:"1ゲームで100点"},
+ {id:"rally50",name:"ラリーの鬼",desc:"1ゲームで50ラリー"},
+ {id:"fever5",name:"フィーバー中毒",desc:"累計フィーバー5回"},
+ {id:"games10",name:"ナンシキ村の常連",desc:"累計10ゲーム遊ぶ"},
+ {id:"total1000",name:"千点の道",desc:"累計スコア1000点"},
+ {id:"ex20game",name:"神ってる",desc:"1ゲームでExcellent20回"},
+];
+const TITLES=[[0,"たまご"],[1,"ナンシキ村の村人"],[3,"ナンシキ村の選手"],[5,"ナンシキ村のエース"],[7,"ナンシキ村の達人"],[9,"村の英雄"],[10,"ナンシキの神"]];
+let ach;
+try{ach=JSON.parse(localStorage.getItem("tamavolley_ach"))||null;}catch(e){ach=null;}
+if(!ach||!ach.un||!ach.st)ach={un:{},st:{games:0,tScore:0,tEx:0,fevers:0}};
+let achToast=[];
+const saveAch=()=>localStorage.setItem("tamavolley_ach",JSON.stringify(ach));
+function currentTitle(){
+  const n=Object.keys(ach.un).length;
+  let t=TITLES[0][1];
+  for(const[c,name]of TITLES)if(n>=c)t=name;
+  return t;
+}
+function unlock(id){
+  if(ach.un[id])return;
+  ach.un[id]=true;saveAch();
+  const a=ACH.find(x=>x.id===id);
+  achToast.push({name:a.name,age:0});
+  beep(990,0.12,"sine",0.12);
+  setTimeout(()=>beep(1320,0.15,"sine",0.12),110);
+}
+function checkAch(){
+  if(gameEx>=1)unlock("first_ex");
+  if(rally>=10)unlock("rally10");
+  if(gameFevers>=1)unlock("combo5");
+  if(ach.st.tEx>=10)unlock("ex10");
+  if(score>=100)unlock("score100");
+  if(rally>=50)unlock("rally50");
+  if(ach.st.fevers>=5)unlock("fever5");
+  if(ach.st.games>=10)unlock("games10");
+  if(ach.st.tScore>=1000)unlock("total1000");
+  if(gameEx>=20)unlock("ex20game");
+}
 let ball=null,charIdx=Math.floor(Math.random()*HATS.length);
 let oppX=0,swing=0,swingCd=0,shake=0,serveAt=0,overAt=0,newBest=false,playStartAt=0;
 let popups=[],bursts=[];
@@ -272,6 +321,7 @@ function serve(){
 }
 function startGame(){
   state="play";rally=0;score=0;newBest=false;ball=null;oppX=rand(-0.3,0.3);
+  combo=0;fever=0;gameEx=0;gameFevers=0;
   serveAt=performance.now()+700;popups=[];
   playStartAt=performance.now();
   beep(660,0.10,"sine",0.12);
@@ -287,6 +337,7 @@ function addPopup(x,y,txt,col){popups.push({x,y,txt,col:col||"#ff5f7e",age:0});}
 
 function miss(){
   state="over";overAt=performance.now();shake=10;
+  ach.st.games++;checkAch();saveAch();
   addPopup(W*0.38,H*0.68,"★","#f5c518");
   addPopup(W*0.55,H*0.64,"★","#f5c518");
   addPopup(W*0.47,H*0.72,"★","#f5c518");
@@ -298,6 +349,9 @@ function update(dt){
   swing=Math.max(0,swing-dt);
   swingCd=Math.max(0,swingCd-dt);
   oppHitT=Math.max(0,oppHitT-dt);
+  fever=Math.max(0,fever-dt);
+  achToast.forEach(t=>t.age+=dt);
+  achToast=achToast.filter(t=>t.age<3);
   shake=Math.max(0,shake-dt*30);
   popups.forEach(p=>p.age+=dt);
   popups=popups.filter(p=>p.age<0.9);
@@ -327,7 +381,11 @@ cv.addEventListener("pointerdown",e=>{
   e.preventDefault();
   if(AC&&AC.state==="suspended")AC.resume();
   const px=e.clientX,py=e.clientY;
-  if(state==="title"){startGame();return;}
+  if(state==="ach"){state="title";return;}
+  if(state==="title"){
+    if(px<W*0.34&&py<H*0.09){state="ach";return;}
+    startGame();return;
+  }
   if(state==="over"){
     if(performance.now()-overAt>600)startGame();
     return;
@@ -358,11 +416,23 @@ cv.addEventListener("pointerdown",e=>{
       toX=clamp(toX,-0.9,0.9);
       // センターに近いほど高得点（マイナスなし、1〜3点）
       const ax=Math.abs(toX);
-      let pts,label,col;
-      if(ax<=0.15){pts=3;label="Excellent!! +3";col="#ff9a2e";beep(1320,0.14,"sine",0.14);}
-      else if(ax<=0.40){pts=2;label="Good! +2";col="#2b6bd9";}
-      else{pts=1;label="Nice +1";col="#ff5f7e";}
-      score+=pts;
+      let pts,grade,col;
+      if(ax<=0.15){pts=3;grade="Excellent!!";col="#ff9a2e";beep(1320,0.14,"sine",0.14);}
+      else if(ax<=0.40){pts=2;grade="Good!";col="#2b6bd9";}
+      else{pts=1;grade="Nice";col="#ff5f7e";}
+      // コンボ：Excellent連続で加算、5でフィーバー突入（10秒間 得点2倍）
+      if(pts===3){
+        combo++;gameEx++;ach.st.tEx++;
+        if(combo>=5&&fever<=0){
+          fever=10;gameFevers++;ach.st.fevers++;combo=0;
+          addPopup(W/2,H*0.35,"🔥FEVER TIME!🔥","#ff6a00");
+          [880,1100,1320,1760].forEach((f,i)=>setTimeout(()=>beep(f,0.15,"sine",0.14),i*90));
+        }
+      }else combo=0;
+      if(fever>0)pts*=2;
+      const label=grade+" +"+pts;
+      score+=pts;ach.st.tScore+=pts;
+      checkAch();
       if(score>best){best=score;newBest=true;localStorage.setItem("tamavolley_best2",best);}
       playHit(1);
       addPopup(p.bx,p.by,label,col);
@@ -531,21 +601,82 @@ function render(){
     ctx.globalAlpha=1;
   });
 
+  // fever演出
+  if(fever>0&&state==="play"){
+    const pulse=0.08+0.05*Math.sin(performance.now()/120);
+    ctx.fillStyle=`rgba(255,180,40,${pulse.toFixed(3)})`;
+    ctx.fillRect(-20,-20,W+40,H+40);
+    ctx.fillStyle="rgba(255,240,150,0.9)";
+    for(let i=0;i<10;i++){
+      const sx2=((i*137+performance.now()*0.05*(1+i%3))%W);
+      const sy2=((i*211+performance.now()*0.09)%H);
+      const r2=2+(i%3);
+      ctx.beginPath();
+      ctx.moveTo(sx2,sy2-r2*2);ctx.lineTo(sx2+r2*0.7,sy2);ctx.lineTo(sx2,sy2+r2*2);ctx.lineTo(sx2-r2*0.7,sy2);
+      ctx.closePath();ctx.fill();
+    }
+  }
+
   // HUD
-  if(state!=="title"){
-    outlineText(String(score),W/2,H*0.09,W*0.14,"#2b6bd9","#fff",W*0.02);
+  if(state!=="title"&&state!=="ach"){
+    outlineText(String(score),W/2,H*0.09,W*0.14,fever>0?"#ff6a00":"#2b6bd9","#fff",W*0.02);
     outlineText("スコア",W/2,H*0.155,W*0.042,"#2b6bd9","#fff");
     outlineText("れんぞく "+rally,W*0.16,H*0.05,W*0.04,"#2e7d46","#fff");
     outlineText("ベスト "+best,W*0.85,H*0.05,W*0.045,"#e0433f","#fff");
+    if(combo>=2)outlineText("コンボ x"+combo,W*0.16,H*0.095,W*0.045,"#ff6a00","#fff");
+    if(fever>0){
+      const fs=W*0.06*(1+0.08*Math.sin(performance.now()/100));
+      outlineText("🔥 FEVER ×2 🔥",W/2,H*0.21,fs,"#ff6a00","#fff");
+      ctx.fillStyle="rgba(255,255,255,0.7)";
+      ctx.fillRect(W*0.3,H*0.24,W*0.4,8);
+      ctx.fillStyle="#ff6a00";
+      ctx.fillRect(W*0.3,H*0.24,W*0.4*(fever/10),8);
+    }
     if(state==="play"&&performance.now()-playStartAt<4500){
       outlineText("はやめ＝逆サイド／おそめ＝同じサイドへとぶ！",W/2,H*0.30,W*0.038,"#4a4a4a","#fff");
       outlineText("黄色ゾーンまで引きつけて打つと まっすぐ高得点！",W/2,H*0.345,W*0.040,"#ff9a2e","#fff");
     }
   }
 
+  // 実績解除トースト
+  achToast.forEach((t,i)=>{
+    const a=t.age<0.3?t.age/0.3:(t.age>2.4?Math.max(0,(3-t.age)/0.6):1);
+    ctx.globalAlpha=a;
+    const y=H*0.25+i*H*0.055;
+    ctx.fillStyle="rgba(50,40,10,0.85)";
+    roundRect(W*0.1,y-H*0.022,W*0.8,H*0.045,12);ctx.fill();
+    ctx.font="bold "+(W*0.038)+"px "+FONT;
+    ctx.fillStyle="#ffd76e";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText("🏆 実績解除「"+t.name+"」",W/2,y);
+    ctx.globalAlpha=1;
+  });
+
   if(state==="title")renderTitle();
+  if(state==="ach"){renderTitle();renderAch();}
   if(state==="over")renderOver();
   ctx.restore();
+}
+
+function renderAch(){
+  ctx.fillStyle="rgba(30,30,30,0.55)";ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="rgba(255,250,240,0.97)";
+  roundRect(W*0.05,H*0.06,W*0.90,H*0.84,20);ctx.fill();
+  ctx.strokeStyle="#ffd76e";ctx.lineWidth=4;roundRect(W*0.05,H*0.06,W*0.90,H*0.84,20);ctx.stroke();
+  outlineText("🏆 じっせき",W/2,H*0.115,W*0.06,"#ff9a2e","#fff");
+  outlineText("称号："+currentTitle(),W/2,H*0.165,W*0.048,"#2b6bd9","#fff");
+  ctx.textAlign="left";ctx.textBaseline="middle";
+  ACH.forEach((a,i)=>{
+    const y=H*0.225+i*H*0.06;
+    const got=!!ach.un[a.id];
+    ctx.font="bold "+(W*0.038)+"px "+FONT;
+    ctx.fillStyle=got?"#2e7d46":"#b5b5b5";
+    ctx.fillText((got?"✅ ":"⬜ ")+a.name,W*0.10,y);
+    ctx.font=(W*0.028)+"px "+FONT;
+    ctx.fillStyle=got?"#7a8677":"#c5c5c5";
+    ctx.fillText(a.desc,W*0.15,y+H*0.026);
+  });
+  ctx.textAlign="center";
+  outlineText("あと"+(ACH.length-Object.keys(ach.un).length)+"こで しんか？ タップでもどる",W/2,H*0.865,W*0.038,"#4a4a4a","#fff");
 }
 
 function renderTitle(){
@@ -553,7 +684,15 @@ function renderTitle(){
     const iw=titleImg.naturalWidth,ih=titleImg.naturalHeight;
     const s=Math.max(W/iw,H/ih);
     ctx.drawImage(titleImg,(W-iw*s)/2,(H-ih*s)/2,iw*s,ih*s);
-    if(best>0)outlineText("ベスト "+best+" 点",W/2,H*0.955,W*0.045,"#e0433f","#fff");
+    outlineText("称号："+currentTitle(),W/2,H*0.915,W*0.042,"#2b6bd9","#fff");
+    if(best>0)outlineText("ベスト "+best+" 点",W/2,H*0.958,W*0.042,"#e0433f","#fff");
+    // 実績ボタン（左上）
+    ctx.fillStyle="rgba(255,250,240,0.9)";
+    roundRect(W*0.02,H*0.02,W*0.30,H*0.055,14);ctx.fill();
+    ctx.strokeStyle="#ffd76e";ctx.lineWidth=3;roundRect(W*0.02,H*0.02,W*0.30,H*0.055,14);ctx.stroke();
+    ctx.font="bold "+(W*0.04)+"px "+FONT;
+    ctx.fillStyle="#ff9a2e";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText("🏆 じっせき",W*0.17,H*0.048);
     return;
   }
   ctx.fillStyle="rgba(255,250,240,0.88)";
@@ -585,6 +724,7 @@ function renderOver(){
   outlineText("（"+rally+"回ラリー）",W/2,H*0.43,W*0.045,"#4a4a4a","#fff");
   if(newBest&&score>0)outlineText("✨ しんきろく！ ✨",W/2,H*0.485,W*0.06,"#ff9a2e","#fff");
   else outlineText("ベスト "+best+" 点",W/2,H*0.485,W*0.05,"#e0433f","#fff");
+  outlineText("称号："+currentTitle(),W/2,H*0.655,W*0.042,"#2b6bd9","#fff");
   drawBallChar(W*0.5,H*0.545,W*0.055,HATS[charIdx],Math.sin(performance.now()/180)*0.2,true);
   if(performance.now()-overAt>600&&Math.floor(performance.now()/600)%2===0)
     outlineText("タップで もういちど！",W/2,H*0.72,W*0.058,"#2b6bd9","#fff");
