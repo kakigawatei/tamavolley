@@ -349,7 +349,10 @@ cv.addEventListener("pointerdown",e=>{
       // タイミング×打点サイドで返球方向が決まる
       // 早め（ネット越えてすぐ）＝逆サイドへ、遅め（引きつけ）＝同じサイドへ、ちょうど＝ど真ん中
       const zMax=NETZ+0.16*(1-ease);
-      const tau=clamp(p.z/zMax,0,1); // 1=早い 0=遅い
+      const zN=0.12; // 引きつけポイント：ここまで待って打つとまっすぐ飛ぶ
+      let tau; // 1=早い 0.5=ちょうど（体の近く） 0=遅い
+      if(p.z>=zN)tau=0.5+0.5*Math.min(1,(p.z-zN)/(zMax-zN));
+      else tau=0.5*(p.z/zN);
       const sideSign=p.x>=0?1:-1;
       let toX=sideSign*(1-2*tau)*(0.65+Math.abs(p.x)*0.3)+rand(-0.05,0.05);
       toX=clamp(toX,-0.9,0.9);
@@ -431,6 +434,14 @@ function render(){
   line(-0.85,0.97,0.85,0.97,3);
   line(0,0.02,0,0.97,2);
   line(-0.85,0.58,0.85,0.58,2);
+  // 引きつけベストゾーン（ここで打つとまっすぐ＝高得点が狙える）
+  if(state==="play"){
+    ctx.fillStyle="rgba(255,220,80,0.16)";
+    ctx.beginPath();
+    ctx.moveTo(sx(-1.0,0.07),gy(0.07));ctx.lineTo(sx(1.0,0.07),gy(0.07));
+    ctx.lineTo(sx(1.0,0.17),gy(0.17));ctx.lineTo(sx(-1.0,0.17),gy(0.17));
+    ctx.closePath();ctx.fill();
+  }
 
   // opponent (net より奥なので先に描く)
   const oz=OPPZ,orr=0.11*W;
@@ -529,7 +540,7 @@ function render(){
     outlineText("ベスト "+best,W*0.85,H*0.05,W*0.045,"#e0433f","#fff");
     if(state==="play"&&performance.now()-playStartAt<4500){
       outlineText("はやめ＝逆サイド／おそめ＝同じサイドへとぶ！",W/2,H*0.30,W*0.038,"#4a4a4a","#fff");
-      outlineText("まんなか狙いで高得点！",W/2,H*0.345,W*0.042,"#ff9a2e","#fff");
+      outlineText("黄色ゾーンまで引きつけて打つと まっすぐ高得点！",W/2,H*0.345,W*0.040,"#ff9a2e","#fff");
     }
   }
 
