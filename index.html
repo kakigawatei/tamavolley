@@ -45,6 +45,27 @@ function beep(f,d,type,g){
   }catch(e){}
 }
 
+/* ---------- hit sound (提供mp3) ---------- */
+let hitRaw=null,hitBuf=null;
+fetch("hit.mp3").then(r=>r.arrayBuffer()).then(b=>{hitRaw=b;tryDecodeHit();}).catch(()=>{});
+function tryDecodeHit(){
+  if(AC&&hitRaw&&!hitBuf)AC.decodeAudioData(hitRaw.slice(0),b=>{hitBuf=b;},()=>{});
+}
+function playHit(vol){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended")AC.resume();
+    tryDecodeHit();
+    if(hitBuf){
+      const s=AC.createBufferSource(),g=AC.createGain();
+      g.gain.value=vol||1;
+      s.buffer=hitBuf;s.connect(g);g.connect(AC.destination);s.start();
+      return;
+    }
+  }catch(e){}
+  beep(880,0.10,"triangle",0.16); // mp3未ロード時のフォールバック
+}
+
 /* ---------- character drawing ---------- */
 const HATS=["cap","hachimaki","visor","china","arrow"];
 function drawChar(x,y,r,hat,back){
@@ -283,7 +304,7 @@ function update(dt){
     oppX=lerp(oppX,ball.toX,Math.min(1,dt*6));
     if(ball.t>=1){ // opponent returns
       oppX=ball.toX;
-      beep(500,0.08,"triangle",0.10);
+      playHit(0.45); // 遠いので小さめ
       serve();
     }
   }else if(ball.t>=1){
@@ -315,7 +336,7 @@ cv.addEventListener("pointerdown",e=>{
       hitDone=true;
       rally++;
       if(rally>best){best=rally;newBest=true;localStorage.setItem("tamavolley_best",best);}
-      beep(880,0.10,"triangle",0.16);
+      playHit(1);
       addPopup(p.bx,p.by,"+1");
       addBurst(p.bx,p.by,p.br);
       if(rally%10===0){addPopup(W/2,H*0.42,rally+"回！すごい！","#ff9a2e");beep(1180,0.15,"sine",0.14);}
