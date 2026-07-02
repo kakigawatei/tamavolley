@@ -359,9 +359,9 @@ cv.addEventListener("pointerdown",e=>{
       // センターに近いほど高得点（マイナスなし、1〜3点）
       const ax=Math.abs(toX);
       let pts,label,col;
-      if(ax<=0.15){pts=3;label="ど真ん中！+3";col="#ff9a2e";beep(1320,0.14,"sine",0.14);}
-      else if(ax<=0.40){pts=2;label="+2";col="#2b6bd9";}
-      else{pts=1;label="+1";col="#ff5f7e";}
+      if(ax<=0.15){pts=3;label="Excellent!! +3";col="#ff9a2e";beep(1320,0.14,"sine",0.14);}
+      else if(ax<=0.40){pts=2;label="Good! +2";col="#2b6bd9";}
+      else{pts=1;label="Nice +1";col="#ff5f7e";}
       score+=pts;
       if(score>best){best=score;newBest=true;localStorage.setItem("tamavolley_best2",best);}
       playHit(1);
