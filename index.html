@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>たまボレ！ ソフトテニス ボレーボレー</title>
+<title>ナンシキ村のポンポン♪</title>
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#87c9ef;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 canvas{display:block;width:100vw;height:100vh}
@@ -202,6 +202,9 @@ oppImgs.ready.src="opp_ready.png";
 oppImgs.swingL.src="opp_swing_left.png";
 oppImgs.swingR.src="opp_swing_right.png";
 let oppHitT=0,oppSide="R";
+
+/* ---------- title art ---------- */
+const titleImg=new Image();titleImg.src="title.jpg";
 
 /* ---------- ball sprites ---------- */
 const ballImgs={},dizzyImgs={};
@@ -463,6 +466,13 @@ function render(){
 }
 
 function renderTitle(){
+  if(titleImg.complete&&titleImg.naturalWidth){
+    const iw=titleImg.naturalWidth,ih=titleImg.naturalHeight;
+    const s=Math.max(W/iw,H/ih);
+    ctx.drawImage(titleImg,(W-iw*s)/2,(H-ih*s)/2,iw*s,ih*s);
+    if(best>0)outlineText("ベスト "+best+" 回",W/2,H*0.955,W*0.045,"#e0433f","#fff");
+    return;
+  }
   ctx.fillStyle="rgba(255,250,240,0.88)";
   roundRect(W*0.06,H*0.10,W*0.88,H*0.62,24);ctx.fill();
   ctx.strokeStyle="#ffb3c8";ctx.lineWidth=5;roundRect(W*0.06,H*0.10,W*0.88,H*0.62,24);ctx.stroke();
