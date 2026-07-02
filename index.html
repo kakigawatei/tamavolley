@@ -25,11 +25,13 @@ const rand=(a,b)=>a+Math.random()*(b-a);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- perspective ---------- */
-const K=2.3,S1=1/(1+K);
+// ローカメラ（目線＝ネット高さ）・ワイド画角・ボレー距離
+const K=1.7,S1=1/(1+K);
 const sc=z=>1/(1+K*z);
-const gy=z=>{const u=(1-sc(z))/(1-S1);return H*0.93-(H*0.93-H*0.42)*u;};
-const sx=(x,z)=>W/2+x*0.5*W*sc(z);
-const sy=(z,y)=>gy(z)-y*0.9*H*sc(z);
+const gy=z=>{const u=(1-sc(z))/(1-S1);return H*0.93-(H*0.93-H*0.56)*u;};
+const sx=(x,z)=>W/2+x*0.62*W*sc(z);
+const sy=(z,y)=>gy(z)-y*0.85*H*sc(z);
+const NETZ=0.38,OPPZ=0.78; // ネットと相手の距離（プレイヤーは中間ポジション）
 
 /* ---------- audio ---------- */
 let AC=null;
@@ -268,9 +270,9 @@ function startGame(){
 }
 function ballPos(){
   const t=ball.t;
-  const z=ball.dir===1?1-t:t;
+  const z=ball.dir===1?OPPZ*(1-t):OPPZ*t;
   const x=lerp(ball.fromX,ball.toX,t);
-  const y=lerp(0.22,0.25,t)+Math.sin(Math.PI*t)*0.32;
+  const y=lerp(0.28,0.30,t)+Math.sin(Math.PI*t)*0.20; // ボレーなので低め軌道
   return{x,z,y,bx:sx(x,z),by:sy(z,y),br:Math.max(8,0.115*W*sc(z))};
 }
 function addPopup(x,y,txt,col){popups.push({x,y,txt,col:col||"#ff5f7e",age:0});}
@@ -329,7 +331,7 @@ cv.addEventListener("pointerdown",e=>{
   if(ball&&ball.dir===1){
     const p=ballPos();
     const ease=Math.min(1,rally/25); // 0=序盤ゆるゆる → 1=本気判定
-    const inRange=p.z<=0.5+0.18*(1-ease); // 序盤はネット手前でも打てる
+    const inRange=p.z<=NETZ+0.16*(1-ease); // 序盤はネット手前でも打てる
     const dist=Math.hypot(px-p.bx,py-p.by);
     const hitR=(Math.max(46,p.br*1.7)+20)*(2.0-1.0*ease);
     if(inRange&&dist<=hitR){
@@ -401,19 +403,19 @@ function render(){
   // lines
   ctx.strokeStyle="#fff";
   const line=(x1,z1,x2,z2,w)=>{ctx.lineWidth=w||3;ctx.beginPath();ctx.moveTo(sx(x1,z1),gy(z1));ctx.lineTo(sx(x2,z2),gy(z2));ctx.stroke();};
-  line(-0.85,0.03,-0.85,0.97);line(0.85,0.03,0.85,0.97);
-  line(-0.85,0.03,0.85,0.03,4);line(-0.85,0.97,0.85,0.97,2);
-  line(0,0.03,0,0.97,2);
-  line(-0.85,0.27,0.85,0.27,2);line(-0.85,0.73,0.85,0.73,2);
+  line(-0.85,0.02,-0.85,0.97);line(0.85,0.02,0.85,0.97);
+  line(-0.85,0.97,0.85,0.97,3);
+  line(0,0.02,0,0.97,2);
+  line(-0.85,0.58,0.85,0.58,2);
 
   // opponent (net より奥なので先に描く)
-  const oz=0.94,orr=0.064*W;
+  const oz=OPPZ,orr=0.11*W;
   {
     let img=oppHitT>0?(oppSide==="L"?oppImgs.swingL:oppImgs.swingR):oppImgs.ready;
     if(!(img.complete&&img.naturalWidth))img=oppImgs.ready;
     const ox=sx(oppX,oz),og=gy(oz);
     if(img.complete&&img.naturalWidth){
-      const oh=0.175*W*(oppHitT>0?1.12:1);
+      const oh=0.62*W*sc(oz)*(oppHitT>0?1.12:1);
       const ow=oh*img.naturalWidth/img.naturalHeight;
       const bob=oppHitT>0?0:Math.sin(performance.now()/280)*H*0.003;
       ctx.fillStyle="rgba(0,0,0,0.18)";
@@ -438,10 +440,10 @@ function render(){
     ctx.beginPath();ctx.arc(p.bx,p.by,p.br*1.32,a+Math.PI,a+Math.PI+1.0);ctx.stroke();
     drawBallChar(p.bx,p.by,p.br,HATS[ball.ch],Math.sin(ball.rot)*0.3);
   };
-  if(p&&p.z>0.5)drawBall();
+  if(p&&p.z>NETZ)drawBall();
 
   // net
-  const nz=0.5,nTop=sy(nz,0.17),nG=gy(nz);
+  const nz=NETZ,nTop=sy(nz,0.20),nG=gy(nz);
   const nx1=sx(-1.0,nz),nx2=sx(1.0,nz);
   ctx.fillStyle="rgba(30,42,70,0.42)";
   ctx.fillRect(nx1,nTop,nx2-nx1,nG-nTop);
@@ -453,7 +455,7 @@ function render(){
   ctx.beginPath();ctx.moveTo(nx1,nTop-4);ctx.lineTo(nx1,nG);ctx.stroke();
   ctx.beginPath();ctx.moveTo(nx2,nTop-4);ctx.lineTo(nx2,nG);ctx.stroke();
 
-  if(p&&p.z<=0.5)drawBall();
+  if(p&&p.z<=NETZ)drawBall();
 
   // player (back view) + racket
   const pr=0.155*W,px=W/2,py=H*1.00;
