@@ -349,20 +349,19 @@ cv.addEventListener("pointerdown",e=>{
       // タイミング×打点サイドで返球方向が決まる
       // 早め（ネット越えてすぐ）＝逆サイドへ、遅め（引きつけ）＝同じサイドへ、ちょうど＝ど真ん中
       const zMax=NETZ+0.16*(1-ease);
-      const zN=0.12; // 引きつけポイント：ここまで待って打つとまっすぐ飛ぶ
-      let tau; // 1=早い 0.5=ちょうど（体の近く） 0=遅い
+      const zN=0.06; // 引きつけポイント：プレイヤーの目の前まで待つとまっすぐ飛ぶ
+      let tau; // 1=早い 0.5=ちょうど（目の前） 0=遅い
       if(p.z>=zN)tau=0.5+0.5*Math.min(1,(p.z-zN)/(zMax-zN));
       else tau=0.5*(p.z/zN);
       const sideSign=p.x>=0?1:-1;
       let toX=sideSign*(1-2*tau)*(0.65+Math.abs(p.x)*0.3)+rand(-0.05,0.05);
       toX=clamp(toX,-0.9,0.9);
-      // センターに近いほど高得点
+      // センターに近いほど高得点（マイナスなし、1〜3点）
       const ax=Math.abs(toX);
       let pts,label,col;
       if(ax<=0.15){pts=3;label="ど真ん中！+3";col="#ff9a2e";beep(1320,0.14,"sine",0.14);}
-      else if(ax<=0.35){pts=2;label="+2";col="#2b6bd9";}
-      else if(ax<=0.55){pts=1;label="+1";col="#ff5f7e";}
-      else{pts=-1;label="はじっこ… -1";col="#9aa7b5";beep(200,0.12,"sine",0.08);}
+      else if(ax<=0.40){pts=2;label="+2";col="#2b6bd9";}
+      else{pts=1;label="+1";col="#ff5f7e";}
       score+=pts;
       if(score>best){best=score;newBest=true;localStorage.setItem("tamavolley_best2",best);}
       playHit(1);
@@ -438,8 +437,8 @@ function render(){
   if(state==="play"){
     ctx.fillStyle="rgba(255,220,80,0.16)";
     ctx.beginPath();
-    ctx.moveTo(sx(-1.0,0.07),gy(0.07));ctx.lineTo(sx(1.0,0.07),gy(0.07));
-    ctx.lineTo(sx(1.0,0.17),gy(0.17));ctx.lineTo(sx(-1.0,0.17),gy(0.17));
+    ctx.moveTo(sx(-1.0,0.02),gy(0.02));ctx.lineTo(sx(1.0,0.02),gy(0.02));
+    ctx.lineTo(sx(1.0,0.10),gy(0.10));ctx.lineTo(sx(-1.0,0.10),gy(0.10));
     ctx.closePath();ctx.fill();
   }
 
