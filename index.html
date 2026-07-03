@@ -255,7 +255,18 @@ function drawBallChar(x,y,r,name,rot,dizzy){
 
 /* ---------- game state ---------- */
 let state="title";
-let rally=0,score=0,best=+(localStorage.getItem("tamavolley_best2")||0);
+
+/* ---------- 難易度 ---------- */
+const LVS={
+  easy:  {name:"かんたん",Tin0:0.95,Tmin:0.38,decay:0.975,spread:0.55,arcs:[0.20],easeN:25},
+  normal:{name:"ふつう",  Tin0:0.70,Tmin:0.33,decay:0.972,spread:0.62,arcs:[0.20],easeN:15},
+  hard:  {name:"ムズい",  Tin0:0.66,Tmin:0.26,decay:0.962,spread:0.82,arcs:[0.10,0.20,0.34],easeN:8},
+};
+let diff=localStorage.getItem("tamavolley_diff")||"easy";
+if(!LVS[diff])diff="easy";
+const bestKey=()=>"tamavolley_best3_"+diff;
+
+let rally=0,score=0,best=+(localStorage.getItem("tamavolley_best3_"+diff)||0);
 
 /* ---------- コンボ＆フィーバー ---------- */
 let combo=0,fever=0,gameEx=0,gameFevers=0;
@@ -311,17 +322,21 @@ let popups=[],bursts=[];
 let last=performance.now();
 function addBurst(x,y,r){bursts.push({x,y,r,age:0});}
 
-const Tin=()=>Math.max(0.38,0.95*Math.pow(0.975,rally));
+const Tin=()=>{const L=LVS[diff];return Math.max(L.Tmin,L.Tin0*Math.pow(L.decay,rally));};
 
 function serve(){
+  const L=LVS[diff];
   charIdx=(charIdx+1)%HATS.length;
   oppHitT=0.32;
   oppSide=oppX<0?"L":"R";
-  ball={dir:1,t:0,T:Tin(),fromX:oppX,toX:rand(-0.55,0.55),ch:charIdx,rot:0};
+  const arc=L.arcs[Math.floor(Math.random()*L.arcs.length)];
+  ball={dir:1,t:0,T:Tin(),fromX:oppX,toX:rand(-L.spread,L.spread),ch:charIdx,rot:0,arc};
 }
 function startGame(){
   state="play";rally=0;score=0;newBest=false;ball=null;oppX=rand(-0.3,0.3);
   combo=0;fever=0;gameEx=0;gameFevers=0;
+  best=+(localStorage.getItem(bestKey())||0);
+  localStorage.setItem("tamavolley_diff",diff);
   serveAt=performance.now()+700;popups=[];
   playStartAt=performance.now();
   beep(660,0.10,"sine",0.12);
@@ -330,7 +345,7 @@ function ballPos(){
   const t=ball.t;
   const z=ball.dir===1?OPPZ*(1-t):OPPZ*t;
   const x=lerp(ball.fromX,ball.toX,t);
-  const y=lerp(0.28,0.30,t)+Math.sin(Math.PI*t)*0.20; // ボレーなので低め軌道
+  const y=lerp(0.28,0.30,t)+Math.sin(Math.PI*t)*(ball.arc||0.20); // 軌道の高さは球種による
   return{x,z,y,bx:sx(x,z),by:sy(z,y),br:Math.max(8,0.115*W*sc(z))};
 }
 function addPopup(x,y,txt,col){popups.push({x,y,txt,col:col||"#ff5f7e",age:0});}
@@ -384,7 +399,18 @@ cv.addEventListener("pointerdown",e=>{
   if(state==="ach"){state="title";return;}
   if(state==="title"){
     if(px<W*0.34&&py<H*0.09){state="ach";return;}
-    startGame();return;
+    state="level";return;
+  }
+  if(state==="level"){
+    const keys=["easy","normal","hard"];
+    for(let i=0;i<3;i++){
+      const y0=H*(0.20+i*0.19);
+      if(py>=y0&&py<=y0+H*0.15&&px>=W*0.07&&px<=W*0.93){
+        diff=keys[i];startGame();return;
+      }
+    }
+    if(py>H*0.82)state="title";
+    return;
   }
   if(state==="over"){
     if(performance.now()-overAt>600)startGame();
@@ -397,7 +423,7 @@ cv.addEventListener("pointerdown",e=>{
   let hitDone=false;
   if(ball&&ball.dir===1){
     const p=ballPos();
-    const ease=Math.min(1,rally/25); // 0=序盤ゆるゆる → 1=本気判定
+    const ease=Math.min(1,rally/LVS[diff].easeN); // 0=序盤ゆるゆる → 1=本気判定（レベルで到達速度が変わる）
     const inRange=p.z<=NETZ+0.16*(1-ease); // 序盤はネット手前でも打てる
     const dist=Math.hypot(px-p.bx,py-p.by);
     const hitR=(Math.max(46,p.br*1.7)+20)*(2.0-1.0*ease);
@@ -433,12 +459,12 @@ cv.addEventListener("pointerdown",e=>{
       const label=grade+" +"+pts;
       score+=pts;ach.st.tScore+=pts;
       checkAch();
-      if(score>best){best=score;newBest=true;localStorage.setItem("tamavolley_best2",best);}
+      if(score>best){best=score;newBest=true;localStorage.setItem(bestKey(),best);}
       playHit(1);
       addPopup(p.bx,p.by,label,col);
       addBurst(p.bx,p.by,p.br);
       if(rally%10===0){addPopup(W/2,H*0.42,rally+"回ラリー！","#ff9a2e");beep(1180,0.15,"sine",0.14);}
-      ball={dir:-1,t:0,T:0.62,fromX:p.x,toX,ch:ball.ch,rot:ball.rot};
+      ball={dir:-1,t:0,T:0.62,fromX:p.x,toX,ch:ball.ch,rot:ball.rot,arc:0.20};
     }
   }
   if(!hitDone){ // 空振り
@@ -618,11 +644,12 @@ function render(){
   }
 
   // HUD
-  if(state!=="title"&&state!=="ach"){
+  if(state!=="title"&&state!=="ach"&&state!=="level"){
     outlineText(String(score),W/2,H*0.09,W*0.14,fever>0?"#ff6a00":"#2b6bd9","#fff",W*0.02);
     outlineText("スコア",W/2,H*0.155,W*0.042,"#2b6bd9","#fff");
     outlineText("れんぞく "+rally,W*0.16,H*0.05,W*0.04,"#2e7d46","#fff");
     outlineText("ベスト "+best,W*0.85,H*0.05,W*0.045,"#e0433f","#fff");
+    outlineText(LVS[diff].name,W*0.85,H*0.095,W*0.038,"#7a5cd6","#fff");
     if(combo>=2)outlineText("コンボ x"+combo,W*0.16,H*0.095,W*0.045,"#ff6a00","#fff");
     if(fever>0){
       const fs=W*0.06*(1+0.08*Math.sin(performance.now()/100));
@@ -653,8 +680,38 @@ function render(){
 
   if(state==="title")renderTitle();
   if(state==="ach"){renderTitle();renderAch();}
+  if(state==="level"){renderTitle();renderLevel();}
   if(state==="over")renderOver();
   ctx.restore();
+}
+
+function renderLevel(){
+  ctx.fillStyle="rgba(30,30,30,0.55)";ctx.fillRect(0,0,W,H);
+  outlineText("レベルをえらんでね！",W/2,H*0.13,W*0.065,"#fff","#2b6bd9",W*0.012);
+  const items=[
+    ["かんたん","ゆったりスタート。はじめてはこれ！","#2e7d46"],
+    ["ふつう","さいしょから速い！うでだめし","#2b6bd9"],
+    ["ムズい","高い球・低い球＆急加速＆ワイド配球！","#d94848"],
+  ];
+  const keys=["easy","normal","hard"];
+  items.forEach(([name,desc,col],i)=>{
+    const y0=H*(0.20+i*0.19);
+    ctx.fillStyle="rgba(255,250,240,0.96)";
+    roundRect(W*0.07,y0,W*0.86,H*0.15,20);ctx.fill();
+    ctx.strokeStyle=col;ctx.lineWidth=5;
+    roundRect(W*0.07,y0,W*0.86,H*0.15,20);ctx.stroke();
+    outlineText(name,W/2,y0+H*0.052,W*0.065,col,"#fff");
+    ctx.font="bold "+(W*0.034)+"px "+FONT;
+    ctx.fillStyle="#4a4a4a";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(desc,W/2,y0+H*0.105);
+    const b=+(localStorage.getItem("tamavolley_best3_"+keys[i])||0);
+    if(b>0){
+      ctx.font="bold "+(W*0.030)+"px "+FONT;
+      ctx.fillStyle="#e0433f";
+      ctx.fillText("ベスト "+b+" 点",W/2,y0+H*0.135);
+    }
+  });
+  outlineText("▼ タイトルにもどる",W/2,H*0.88,W*0.045,"#fff","#4a4a4a",W*0.008);
 }
 
 function renderAch(){
@@ -709,7 +766,7 @@ function renderOver(){
   outlineText("スコア "+score+" 点",W/2,H*0.37,W*0.09,"#ff5f7e","#fff",W*0.018);
   outlineText("（"+rally+"回ラリー）",W/2,H*0.43,W*0.045,"#4a4a4a","#fff");
   if(newBest&&score>0)outlineText("✨ しんきろく！ ✨",W/2,H*0.485,W*0.06,"#ff9a2e","#fff");
-  else outlineText("ベスト "+best+" 点",W/2,H*0.485,W*0.05,"#e0433f","#fff");
+  else outlineText("ベスト "+best+" 点（"+LVS[diff].name+"）",W/2,H*0.485,W*0.05,"#e0433f","#fff");
   outlineText("称号："+currentTitle(),W/2,H*0.655,W*0.042,"#2b6bd9","#fff");
   drawBallChar(W*0.5,H*0.545,W*0.055,HATS[charIdx],Math.sin(performance.now()/180)*0.2,true);
   if(performance.now()-overAt>600&&Math.floor(performance.now()/600)%2===0)
