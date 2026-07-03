@@ -545,7 +545,8 @@ function render(){
     if(!(img.complete&&img.naturalWidth))img=oppImgs.ready;
     const ox=sx(oppX,oz),og=gy(oz);
     if(img.complete&&img.naturalWidth){
-      const oh=0.62*W*sc(oz)*(oppHitT>0?1.12:1);
+      const poseK=img===oppImgs.swingR?0.94:1; // 右振りは絵の作りで大きく見えるため補正
+      const oh=0.62*W*sc(oz)*poseK;
       const ow=oh*img.naturalWidth/img.naturalHeight;
       const bob=oppHitT>0?0:Math.sin(performance.now()/280)*H*0.003;
       ctx.fillStyle="rgba(0,0,0,0.18)";
